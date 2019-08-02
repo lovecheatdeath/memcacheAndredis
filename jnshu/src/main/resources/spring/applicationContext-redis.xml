@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:p="http://www.springframework.org/schema/p"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:cache="http://www.springframework.org/schema/cache" xmlns:c="http://www.springframework.org/schema/c"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+            http://www.springframework.org/schema/beans/spring-beans-4.2.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd http://www.springframework.org/schema/cache http://www.springframework.org/schema/cache/spring-cache.xsd">
+
+<!-- 启用缓存注解功能，这个是必须的，否则注解不会生效，另外，该注解一定要声明在spring主配置文件中才会生效 -->
+
+    <context:property-placeholder location="classpath:config/redis.properties" ignore-unresolvable="true" />
+    <!-- redis 相关配置 -->
+    <bean id="poolConfig" class="redis.clients.jedis.JedisPoolConfig"
+          p:maxIdle="${redis.maxIdle}"
+          p:maxTotal="${redis.maxTotal}"
+          p:maxWaitMillis="${redis.maxWaitMillis}"
+          p:minEvictableIdleTimeMillis="${redis.minEvictableIdleTimeMillis}"
+          p:numTestsPerEvictionRun="${redis.numTestsPerEvictionRun}"
+          p:timeBetweenEvictionRunsMillis="${redis.timeBetweenEvictionRunsMillis}"
+          p:testOnBorrow="${redis.testOnBorrow}"
+          p:testWhileIdle="${redis.testWhileIdle}"/>
+
+    <bean id="JedisConnectionFactory" class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory"
+          p:host-name="${redis.host}" p:port="${redis.port}" p:password="${redis.password}" p:pool-config-ref="poolConfig"/>
+
+    <!-- 序列化方式 -->
+    <!--<bean id="keySerializer" class="org.springframework.data.redis.serializer.StringRedisSerializer"/>-->
+    <!--<bean id="valueSerializer" class="org.springframework.data.redis.serializer.JdkSerializationRedisSerializer"/>-->
+    <!--<bean id="hashKeySerializer" class="org.springframework.data.redis.serializer.StringRedisSerializer"/>-->
+    <!--<bean id="hashValueSerializer" class="org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer"/>-->
+
+    <!-- redis操作模板 -->
+    <bean id="redisTemplate" class="org.springframework.data.redis.core.RedisTemplate"
+          p:connectionFactory-ref="JedisConnectionFactory"/>
+          <!--p:keySerializer="org.springframework.data.redis.serializer.StringRedisSerializer"-->
+          <!--p:valueSerializer="org.springframework.data.redis.serializer.JdkSerializationRedisSerializer"-->
+          <!--p:hashKeySerializer="org.springframework.data.redis.serializer.StringRedisSerializer"-->
+          <!--p:hashValueSerializer="org.springframework.data.redis.serializer.JdkSerializationRedisSerializer"/>-->
+    <!--<bean id="redisCacheManager" class="org.springframework.data.redis.cache.RedisCacheManager"-->
+                 <!--factory-method="create">-->
+    <!--<constructor-arg ref="JedisConnectionFactory"/>-->
+<!--</bean>-->
+    <!--<bean id="cacheManager" class="org.springframework.data.redis.cache.RedisCacheManager"-->
+          <!--c:redis-operations-ref="redisTemplate" />-->
+    <bean id="redisCacheManager" class="org.springframework.data.redis.cache.RedisCacheManager">
+        <constructor-arg name="redisOperations" ref="redisTemplate" />
+        <property name="defaultExpiration" value="${redis.expiration}" />
+    </bean>
+    <!-- 配置RedisCacheConfig -->
+    <bean id="redisCache" class="com.jnshu.utils.RedisCache">
+        <constructor-arg ref="JedisConnectionFactory"/>
+        <constructor-arg ref="redisTemplate"/>
+        <constructor-arg ref="redisCacheManager"/>
+    </bean>
+     <!-- redis集群配置 哨兵模式begin -->
+        <bean id="sentinelConfiguration" class="org.springframework.data.redis.connection.RedisSentinelConfiguration">
+            <property name="master">
+                <bean class="org.springframework.data.redis.connection.RedisNode">
+                    <!--这个值要和Sentinel中指定的master的值一致，不然启动时找不到Sentinel会报错的-->
+                    <property name="name" value="mymaster"></property>
+                </bean>
+            </property>
+            <!--指定Sentinel的IP和端口，不是Master和Slave的-->
+            <property name="sentinels">
+                <set>
+                    <bean class="org.springframework.data.redis.connection.RedisNode">
+                        <constructor-arg name="host" value="${redis.sentinel.host1}"></constructor-arg>
+                        <constructor-arg name="port" value="${redis.sentinel.port1}"></constructor-arg>
+                    </bean>
+                    <bean class="org.springframework.data.redis.connection.RedisNode">
+                        <constructor-arg name="host" value="${redis.sentinel.host2}"></constructor-arg>
+                        <constructor-arg name="port" value="${redis.sentinel.port2}"></constructor-arg>
+                    </bean>
+                </set>
+            </property>
+        </bean>
+    <!--<bean id="listOperations" factory-bean="redisTemplate" factory-method="opsForList"/>-->
+    <!-- 配置RedisCacheManager -->
+    <!--<bean id="redisCacheManager" class="org.springframework.data.redis.cache.RedisCacheManager">-->
+        <!--<constructor-arg index="0" ref="redisTemplate"/>-->
+    <!--</bean>-->
+     <!--配置RedisCacheConfig-->
+    <!--<bean id="redisCacheConfig" class="com.jnshu.utils.RedisCache">-->
+        <!--<constructor-arg ref="JedisConnectionFactory"/>-->
+        <!--<constructor-arg ref="redisTemplate"/>-->
+        <!--<constructor-arg ref="redisCacheManager"/>-->
+    <!--</bean>-->
+    <!-- 配置RedisCacheManager -->
+    <!--<bean id="cacheManager" class="org.springframework.cache.support.SimpleCacheManager">-->
+        <!--<property name="caches">-->
+            <!--<set>-->
+                <!--&lt;!&ndash; 这里可以配置多个redis &ndash;&gt;-->
+                 <!--<bean class="com.jnshu.utils.RedisCache">-->
+                   <!--<property name="redisTemplate" ref="redisTemplate" />-->
+                   <!--<property name="name" value="default"/>-->
+                <!--</bean>-->
+                <!--<bean class="com.jnshu.utils.RedisCache">-->
+                    <!--<property name="redisTemplate" ref="redisTemplate" />-->
+                    <!--<property name="name" value="common"/>-->
+                    <!--&lt;!&ndash; common名称要在类或方法的注解中使用 &ndash;&gt;-->
+                <!--</bean>-->
+            <!--</set>-->
+        <!--</property>-->
+    <!--</bean>-->
+</beans>
